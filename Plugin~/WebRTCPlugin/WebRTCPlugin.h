@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef WEBRTC_PLUGIN_VERSION
-#define WEBRTC_PLUGIN_VERSION "3.0.2"
+#define WEBRTC_PLUGIN_VERSION "3.0.3"
 #endif
 
 #include <api/frame_transformer_interface.h>
