@@ -55,11 +55,15 @@
 #define SUPPORT_VULKAN 1 // Requires Vulkan SDK to be installed
 #endif
 #elif UNITY_ANDROID
+#ifndef WEBRTC_NO_OPENGL
 #ifndef SUPPORT_OPENGL_ES
 #define SUPPORT_OPENGL_ES 1
 #endif
 #define SUPPORT_OPENGL_UNIFIED SUPPORT_OPENGL_ES
+#endif
+#ifndef WEBRTC_NO_VULKAN
 #define SUPPORT_VULKAN 1
+#endif
 #elif UNITY_LINUX
 #define SUPPORT_OPENGL_UNIFIED 1
 #define SUPPORT_OPENGL_CORE 1

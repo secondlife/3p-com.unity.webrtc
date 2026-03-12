@@ -94,7 +94,7 @@ set_target_properties(WebRTCLib PROPERTIES CXX_VISIBILITY_PRESET hidden
 if(iOS OR macOS)
   target_sources(WebRTCLib PRIVATE ../libcxx/debug.cpp)
 else()
-  if(Vulkan_FOUND)
+  if(Vulkan_FOUND AND NOT WEBRTC_NO_GRAPHICS)
     target_sources(WebRTCLib PRIVATE UnityVulkanInterfaceFunctions.cpp
                                      UnityVulkanInterfaceFunctions.h)
   endif()
@@ -217,10 +217,18 @@ elseif(iOS)
   target_link_libraries(WebRTCLib PRIVATE ${WEBRTC_LIBRARY} ${FRAMEWORK_LIBS})
   set_target_properties(WebRTCLib PROPERTIES LINK_FLAGS "-ObjC")
 elseif(Android)
-  target_compile_definitions(WebRTCLib PUBLIC WEBRTC_ANDROID WEBRTC_POSIX
-                                              VK_NO_PROTOTYPES)
-  target_link_libraries(WebRTCLib PRIVATE ${WEBRTC_LIBRARY} log OpenSLES GLESv3
-                                          EGL)
+  if(WEBRTC_NO_GRAPHICS)
+    target_compile_definitions(WebRTCLib PUBLIC WEBRTC_ANDROID WEBRTC_POSIX
+                                                VK_NO_PROTOTYPES
+                                                WEBRTC_NO_VULKAN
+                                                WEBRTC_NO_OPENGL)
+    target_link_libraries(WebRTCLib PRIVATE ${WEBRTC_LIBRARY} log OpenSLES)
+  else()
+    target_compile_definitions(WebRTCLib PUBLIC WEBRTC_ANDROID WEBRTC_POSIX
+                                                VK_NO_PROTOTYPES)
+    target_link_libraries(WebRTCLib PRIVATE ${WEBRTC_LIBRARY} log OpenSLES GLESv3
+                                            EGL)
+  endif()
   target_compile_options(WebRTCLib PUBLIC -fno-lto -fno-rtti -fPIC)
 
   # Linker excludes unused symbols from the shared library when linking the

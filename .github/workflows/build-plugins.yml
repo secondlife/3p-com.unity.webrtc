@@ -1,0 +1,145 @@
+name: Build Native Plugins
+
+on:
+  push:
+    paths:
+      - 'Plugin~/**'
+      - 'BuildScripts~/**'
+      - '.github/workflows/build-plugins.yml'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+
+permissions:
+  contents: write
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Windows x86_64 build
+  # ──────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download libwebrtc (Windows)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/Unity-Technologies/com.unity.webrtc/releases/download/M116-20250805/webrtc-win.zip"
+          if (-not (Test-Path "Plugin~/webrtc")) {
+            Invoke-WebRequest -Uri $url -OutFile webrtc.zip
+            Expand-Archive -Path webrtc.zip -DestinationPath Plugin~/webrtc -Force
+            Remove-Item webrtc.zip
+          }
+
+      - name: Configure (Windows)
+        shell: pwsh
+        run: |
+          cd Plugin~
+          cmake --preset=x64-windows-msvc `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DWEBRTC_NO_GRAPHICS=ON
+
+      - name: Build (Windows)
+        shell: pwsh
+        run: |
+          cd Plugin~
+          cmake --build --preset=release-windows-msvc --target=WebRTCPlugin
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webrtc-win-x64
+          path: Runtime/Plugins/x86_64/webrtc.dll
+
+  # ──────────────────────────────────────────────
+  # Android build (arm64-v8a + x86_64)
+  # ──────────────────────────────────────────────
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download libwebrtc (Android)
+        run: |
+          curl -L -o webrtc.zip \
+            https://github.com/Unity-Technologies/com.unity.webrtc/releases/download/M116-20250805/webrtc-android.zip
+          unzip -o -d Plugin~/webrtc webrtc.zip
+          cp -f Plugin~/webrtc/lib/libwebrtc.aar Runtime/Plugins/Android/
+          rm webrtc.zip
+
+      - name: Build Android (arm64-v8a + x86_64)
+        run: |
+          cd Plugin~
+          for ARCH_ABI in arm64-v8a x86_64; do
+            echo "::group::Configure $ARCH_ABI"
+            cmake . \
+              -B build \
+              -DCMAKE_SYSTEM_NAME=Android \
+              -DCMAKE_ANDROID_API_MIN=24 \
+              -DCMAKE_ANDROID_API=24 \
+              -DCMAKE_ANDROID_ARCH_ABI=$ARCH_ABI \
+              -DCMAKE_ANDROID_NDK=$ANDROID_NDK \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_ANDROID_STL_TYPE=c++_static \
+              -DWEBRTC_NO_GRAPHICS=ON
+            echo "::endgroup::"
+
+            echo "::group::Build $ARCH_ABI"
+            cmake --build build --target WebRTCPlugin
+            echo "::endgroup::"
+
+            # Pack libwebrtc.so into the .aar
+            pushd ../Runtime/Plugins/Android
+            mkdir -p jni/$ARCH_ABI
+            mv libwebrtc.so jni/$ARCH_ABI/
+            zip -g libwebrtc.aar jni/$ARCH_ABI/libwebrtc.so
+            rm -rf jni
+            popd
+
+            rm -rf build
+          done
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webrtc-android
+          path: Runtime/Plugins/Android/libwebrtc.aar
+
+  # ──────────────────────────────────────────────
+  # Commit artifacts back to the repo
+  # ──────────────────────────────────────────────
+  commit-artifacts:
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy artifacts to package layout
+        run: |
+          cp -f artifacts/webrtc-win-x64/webrtc.dll   Runtime/Plugins/x86_64/webrtc.dll
+          cp -f artifacts/webrtc-android/libwebrtc.aar Runtime/Plugins/Android/libwebrtc.aar
+
+      - name: Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Runtime/Plugins/x86_64/webrtc.dll Runtime/Plugins/Android/libwebrtc.aar
+          if git diff --cached --quiet; then
+            echo "No artifact changes to commit."
+          else
+            git commit -m "ci: update native plugins [skip ci]"
+            git push
+          fi
