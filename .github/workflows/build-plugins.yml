@@ -156,11 +156,16 @@ jobs:
           cp -r build/webrtc.xcarchive/Products/@rpath/webrtc.framework \
             ../Runtime/Plugins/iOS/webrtc.framework
 
+      - name: Package iOS framework
+        run: |
+          cd Runtime/Plugins/iOS
+          tar czf webrtc-framework.tar.gz webrtc.framework
+
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: webrtc-ios
-          path: Runtime/Plugins/iOS/webrtc.framework
+          path: Runtime/Plugins/iOS/webrtc-framework.tar.gz
 
   # ──────────────────────────────────────────────
   # Commit artifacts back to the repo
@@ -181,7 +186,7 @@ jobs:
           cp -f artifacts/webrtc-win-x64/webrtc.dll   Runtime/Plugins/x86_64/webrtc.dll
           cp -f artifacts/webrtc-android/libwebrtc.aar Runtime/Plugins/Android/libwebrtc.aar
           rm -rf Runtime/Plugins/iOS/webrtc.framework
-          cp -r artifacts/webrtc-ios/webrtc.framework Runtime/Plugins/iOS/webrtc.framework
+          tar xzf artifacts/webrtc-ios/webrtc-framework.tar.gz -C Runtime/Plugins/iOS/
 
       - name: Commit and push
         run: |
